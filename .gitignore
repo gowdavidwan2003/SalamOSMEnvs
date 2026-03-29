@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dev.log
+error.log
+log.json
+.vercel/
