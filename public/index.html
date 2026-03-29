@@ -382,28 +382,13 @@ function downloadBat(envId, type) {
 
   const data = type === 'COM' ? env.com_data : env.som_data;
   const cmd = data?.logCommand;
-  if (!env.server_host || !cmd) {
-    alert('Missing SSH Server Host or Log Command for this component.');
+  if (!cmd) {
+    alert('Missing Log Command for this component.');
     return;
   }
 
-  const batContent = `@echo off\n` +
-    `title ENV Navigator - ${env.name} - ${type} Logs\n` +
-    `echo =============================================\n` +
-    `echo  ENV Navigator - Log Viewer\n` +
-    `echo  Environment: ${env.name}\n` +
-    `echo  Component:   ${type}\n` +
-    `echo  Server:      ${env.server_host}\n` +
-    `echo =============================================\n` +
-    `echo.\n` +
-    `echo Connecting via SSH...\n` +
-    `echo.\n` +
-    `"C:\\Program Files\\PuTTY\\plink.exe" -ssh ${env.server_user || ''}@${env.server_host} -pw ${env.server_password || ''} "${cmd}"\n` +
-    `echo.\n` +
-    `echo =============================================\n` +
-    `echo  Connection closed. Press any key to exit.\n` +
-    `echo =============================================\n` +
-    `pause\n`;
+  const trimmedCmd = String(cmd).trim();
+  const batContent = trimmedCmd.startsWith('@echo off') ? trimmedCmd : `@echo off\n${trimmedCmd}\n`;
 
   const blob = new Blob([batContent], { type: 'application/bat' });
   const url = URL.createObjectURL(blob);
@@ -455,6 +440,7 @@ setInterval(fetchData, 30000);
 </script>
 </body>
 </html>
+
 
 
 
