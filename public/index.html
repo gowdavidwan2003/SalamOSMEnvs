@@ -48,7 +48,9 @@
   .card-MIG .card-header { border-top: 3px solid var(--mig); }
   .card-header { padding: 16px; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); }
   .card-title { font-size: 15px; font-weight: 600; }
+  .card-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .card-subtitle { font-family: 'IBM Plex Mono'; font-size: 11px; color: var(--text-muted); }
+  .update-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; background: rgba(245,158,11,0.18); color: var(--uat); border: 1px solid rgba(245,158,11,0.35); }
   .card-actions { display: flex; gap: 4px; }
   .grid-header, .grid-row { display: grid; grid-template-columns: 1fr 1fr; }
   .grid-header { border-bottom: 1px solid var(--border); }
@@ -105,6 +107,10 @@
   .status-approved { background: rgba(16,185,129,0.15); color: var(--success); }
   .status-pending { background: rgba(217,119,6,0.18); color: var(--uat); }
   .status-rejected { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .developer-card { margin: 32px 24px 24px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-card); box-shadow: var(--shadow); text-align: center; }
+  .developer-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+  .developer-links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; font-size: 13px; }
+  .developer-links a { color: var(--primary); text-decoration: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (max-width: 1400px) { .env-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 900px) { .env-grid, .grid-header, .grid-row, .form-row { grid-template-columns: 1fr; } .col-title:first-child, .grid-cell:first-child { border-right: none; } }
@@ -187,9 +193,18 @@
 
 <div class="main" id="mainContent"><div class="empty-state">Loading environments... <span class="loader"></span></div></div>
 
-<div class="modal-overlay" id="envModalOverlay"><div class="modal"><div class="modal-header"><div class="modal-title" id="modalTitle">Add Environment</div><button class="modal-close" id="closeModalBtn">&times;</button></div><div class="modal-body"><form id="editForm"><input type="hidden" id="envId"><div class="form-section"><div class="form-section-title">Basic Info</div><div class="form-row"><div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="envName" required></div><div class="form-group"><label class="form-label">Group *</label><select class="form-select" id="envGroup" required><option value="">Select...</option><option value="PROD">PROD</option><option value="UAT">UAT</option><option value="SIT">SIT</option><option value="ST">ST</option><option value="MIG">MIG</option><option value="DEV">DEV</option></select></div></div><div class="form-row"><div class="form-group"><label class="form-label">Dev Alias</label><input class="form-input" id="envDevName"></div><div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="envNotes"></div></div></div><div class="form-section"><div class="form-section-title">URLs</div><div class="form-row"><div class="form-group"><label class="form-label">COM Weblogic Console</label><input class="form-input" id="comConsoleUrl"></div><div class="form-group"><label class="form-label">SOM Weblogic Console</label><input class="form-input" id="somConsoleUrl"></div></div><div class="form-row"><div class="form-group"><label class="form-label">COM Order Management</label><input class="form-input" id="comOrderMgmtUrl"></div><div class="form-group"><label class="form-label">SOM Order Management</label><input class="form-input" id="somOrderMgmtUrl"></div></div><div class="form-row"><div class="form-group"><label class="form-label">COM Orchestration</label><input class="form-input" id="comOrchUrl"></div><div class="form-group"><label class="form-label">SOM Orchestration</label><input class="form-input" id="somOrchUrl"></div></div></div><div class="form-section"><div class="form-section-title">SSH / Logs</div><div class="form-row"><div class="form-group"><label class="form-label">SSH Server Host</label><input class="form-input" id="serverHost"></div><div class="form-group"><label class="form-label">SSH Username</label><input class="form-input" id="serverUser"></div></div><div class="form-row"><div class="form-group full"><label class="form-label">SSH Password</label><input type="password" class="form-input" id="serverPass"></div></div><div class="form-row"><div class="form-group full"><label class="form-label">COM Log Command</label><textarea class="form-textarea" id="comLogCmd"></textarea></div><div class="form-group full"><label class="form-label">SOM Log Command</label><textarea class="form-textarea" id="somLogCmd"></textarea></div></div></div><div class="form-section"><div class="form-section-title">Database Details</div><div class="form-row"><div class="form-group full"><label class="form-label">COM DB Info</label><textarea class="form-textarea" id="comDbInfo"></textarea></div><div class="form-group full"><label class="form-label">SOM DB Info</label><textarea class="form-textarea" id="somDbInfo"></textarea></div></div></div><div class="form-section"><div class="form-section-title">Other Config</div><div class="form-row"><div class="form-group full"><label class="form-label">Host File Entries</label><textarea class="form-textarea" id="hostEntries"></textarea></div><div class="form-group full"><label class="form-label">Other Information</label><textarea class="form-textarea" id="otherInfo"></textarea></div></div></div></form></div><div class="modal-footer"><button class="btn" id="cancelModalBtn">Cancel</button><button class="btn btn-primary" id="saveEnvBtn">Save Environment</button></div></div></div>
+<div class="modal-overlay" id="envModalOverlay"><div class="modal"><div class="modal-header"><div class="modal-title" id="modalTitle">Add Environment</div><button class="modal-close" id="closeModalBtn">&times;</button></div><div class="modal-body"><form id="editForm"><input type="hidden" id="envId"><div class="form-section"><div class="form-section-title">Basic Info</div><div class="form-row"><div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="envName" required></div><div class="form-group"><label class="form-label">Group *</label><select class="form-select" id="envGroup" required><option value="">Select...</option><option value="PROD">PROD</option><option value="UAT">UAT</option><option value="SIT">SIT</option><option value="ST">ST</option><option value="MIG">MIG</option><option value="DEV">DEV</option></select></div></div><div class="form-row"><div class="form-group"><label class="form-label">Dev Alias</label><input class="form-input" id="envDevName"></div><div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="envNotes"></div></div></div><div class="form-section"><div class="form-section-title">URLs</div><div class="form-row"><div class="form-group"><label class="form-label">COM Weblogic Console</label><input class="form-input" id="comConsoleUrl"></div><div class="form-group"><label class="form-label">SOM Weblogic Console</label><input class="form-input" id="somConsoleUrl"></div></div><div class="form-row"><div class="form-group"><label class="form-label">COM Order Management</label><input class="form-input" id="comOrderMgmtUrl"></div><div class="form-group"><label class="form-label">SOM Order Management</label><input class="form-input" id="somOrderMgmtUrl"></div></div><div class="form-row"><div class="form-group"><label class="form-label">COM Orchestration</label><input class="form-input" id="comOrchUrl"></div><div class="form-group"><label class="form-label">SOM Orchestration</label><input class="form-input" id="somOrchUrl"></div></div></div><div class="form-section"><div class="form-section-title">SSH / Logs</div><div class="form-row"><div class="form-group"><label class="form-label">SSH Server Host</label><input class="form-input" id="serverHost"></div><div class="form-group"><label class="form-label">SSH Username</label><input class="form-input" id="serverUser"></div></div><div class="form-row"><div class="form-group full"><label class="form-label">SSH Password</label><input type="text" class="form-input" id="serverPass"></div></div><div class="form-row"><div class="form-group full"><label class="form-label">COM Log Command</label><textarea class="form-textarea" id="comLogCmd"></textarea></div><div class="form-group full"><label class="form-label">SOM Log Command</label><textarea class="form-textarea" id="somLogCmd"></textarea></div></div></div><div class="form-section"><div class="form-section-title">Database Details</div><div class="form-row"><div class="form-group full"><label class="form-label">COM DB Info</label><textarea class="form-textarea" id="comDbInfo"></textarea></div><div class="form-group full"><label class="form-label">SOM DB Info</label><textarea class="form-textarea" id="somDbInfo"></textarea></div></div></div><div class="form-section"><div class="form-section-title">Other Config</div><div class="form-row"><div class="form-group full"><label class="form-label">Host File Entries</label><textarea class="form-textarea" id="hostEntries"></textarea></div><div class="form-group full"><label class="form-label">Other Information</label><textarea class="form-textarea" id="otherInfo"></textarea></div></div></div></form></div><div class="modal-footer"><button class="btn" id="cancelModalBtn">Cancel</button><button class="btn btn-primary" id="saveEnvBtn">Save Environment</button></div></div></div>
 
 <div id="toast" class="toast">Action successful</div>
+
+<div class="developer-card">
+  <div class="developer-title">🐾 Built by Vidwan Gowda 🐾</div>
+  <div class="developer-links">
+    <a href="https://www.linkedin.com/in/gowdavidwan2003/" target="_blank" rel="noopener noreferrer">🔗 LinkedIn</a>
+    <a href="https://github.com/gowdavidwan2003" target="_blank" rel="noopener noreferrer">💻 GitHub</a>
+    <a href="https://github.com/gowdavidwan2003/SalamOSMEnvs" target="_blank" rel="noopener noreferrer">📦 Project Repo</a>
+  </div>
+</div>
 </div>
 
 <script>
@@ -470,14 +485,23 @@ function parseLogCommands(value) {
     .filter(Boolean);
 }
 
+function isRecentlyUpdated(updatedAt) {
+  if (!updatedAt) return false;
+  const updatedTime = new Date(updatedAt).getTime();
+  if (Number.isNaN(updatedTime)) return false;
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  return Date.now() - updatedTime <= sevenDaysMs;
+}
+
 function generateCardHTML(env) {
   const com = normalizeJsonField(env.com_data);
   const som = normalizeJsonField(env.som_data);
   const hasServer = !!env.server_host;
+  const recentlyUpdated = isRecentlyUpdated(env.updated_at);
   return `<div class="env-card card-${env.group_name}">
     <div class="card-header">
       <div class="card-title-wrap">
-        <div class="card-title">${escapeHtml(env.name)} ${env.dev_name ? `(${escapeHtml(env.dev_name)})` : ''}</div>
+        <div class="card-title-row"><div class="card-title">${escapeHtml(env.name)} ${env.dev_name ? `(${escapeHtml(env.dev_name)})` : ''}</div>${recentlyUpdated ? '<span class="update-badge">⚠ Updated < 7 days</span>' : ''}</div>
         <div class="card-subtitle">${escapeHtml(env.notes || 'No notes')}</div>
       </div>
       <div class="card-actions">
@@ -736,6 +760,9 @@ setInterval(() => { if (currentUser?.status === 'approved') fetchData(); }, 3000
 </script>
 </body>
 </html>
+
+
+
 
 
 
