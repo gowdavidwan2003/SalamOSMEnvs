@@ -1,4 +1,5 @@
 const { supabase } = require('../../lib/db');
+const { requireApprovedUser } = require('../../lib/auth');
 
 const ALLOWED_GROUPS = new Set(['PROD', 'UAT', 'SIT', 'ST', 'MIG', 'DEV']);
 
@@ -53,6 +54,9 @@ module.exports = async function handler(req, res) {
   if (!supabase) {
     return sendJson(res, 500, { error: 'Supabase is not configured.' });
   }
+
+  const currentUser = await requireApprovedUser(req, res);
+  if (!currentUser) return;
 
   try {
     if (req.method === 'GET') {

@@ -4,6 +4,11 @@ const path = require('path');
 const environmentsHandler = require('./api/environments/index.js');
 const environmentIdHandler = require('./api/environments/[id].js');
 const seedHandler = require('./api/seed.js');
+const registerHandler = require('./api/auth/register.js');
+const loginHandler = require('./api/auth/login.js');
+const meHandler = require('./api/auth/me.js');
+const usersHandler = require('./api/auth/users.js');
+const changePasswordHandler = require('./api/auth/change-password.js');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -34,6 +39,14 @@ app.route('/api/environments/:id')
   .get(handleEnvironmentById)
   .put(handleEnvironmentById)
   .delete(handleEnvironmentById);
+
+app.post('/api/auth/register', (req, res) => registerHandler(req, res));
+app.post('/api/auth/login', (req, res) => loginHandler(req, res));
+app.post('/api/auth/change-password', (req, res) => changePasswordHandler(req, res));
+app.get('/api/auth/me', (req, res) => meHandler(req, res));
+app.route('/api/auth/users')
+  .get((req, res) => usersHandler(req, res))
+  .put((req, res) => usersHandler(req, res));
 
 app.post('/api/seed', (req, res) => seedHandler(req, res));
 

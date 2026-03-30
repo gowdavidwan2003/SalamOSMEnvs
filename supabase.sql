@@ -29,3 +29,27 @@ ALTER TABLE public.environments
 -- Note: Ensure Row Level Security (RLS) is disabled if you are strictly relying on server service_role keys
 -- or configure correct policies if using anon keys.
 ALTER TABLE public.environments DISABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.app_users (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  email text NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  full_name text,
+  role text NOT NULL DEFAULT 'user',
+  status text NOT NULL DEFAULT 'pending',
+  approved_by uuid REFERENCES public.app_users(id) ON DELETE SET NULL,
+  approved_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.app_sessions (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES public.app_users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamp with time zone NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.app_users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_sessions DISABLE ROW LEVEL SECURITY;

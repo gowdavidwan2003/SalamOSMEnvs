@@ -83,12 +83,58 @@
   .toast.show { transform: translateY(0); opacity: 1; }
   .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
   .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+  .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .auth-card { width: 100%; max-width: 440px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 24px; }
+  .auth-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+  .auth-subtitle { color: var(--text-muted); margin-bottom: 24px; font-size: 14px; }
+  .auth-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .auth-tab { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; }
+  .auth-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .auth-error { margin-top: 12px; color: var(--danger); font-size: 13px; }
+  .auth-success { margin-top: 12px; color: var(--success); font-size: 13px; }
+  .hidden { display: none !important; }
+  .user-badge { font-size: 12px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; }
+  .admin-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 32px; }
+  .admin-table { width: 100%; border-collapse: collapse; }
+  .admin-table th, .admin-table td { padding: 12px; border-bottom: 1px solid var(--border); text-align: left; font-size: 13px; }
+  .settings-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 32px; }
+  .subnav { display: flex; gap: 10px; margin: 20px 24px 0; flex-wrap: wrap; }
+  .subnav-btn { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); cursor: pointer; font-size: 13px; font-weight: 600; }
+  .subnav-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .status-pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .status-approved { background: rgba(16,185,129,0.15); color: var(--success); }
+  .status-pending { background: rgba(217,119,6,0.18); color: var(--uat); }
+  .status-rejected { background: rgba(239,68,68,0.15); color: var(--danger); }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (max-width: 1400px) { .env-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 900px) { .env-grid, .grid-header, .grid-row, .form-row { grid-template-columns: 1fr; } .col-title:first-child, .grid-cell:first-child { border-right: none; } }
 </style>
 </head>
 <body>
+<div id="authApp" class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-title">ENV Navigator Access</div>
+    <div class="auth-subtitle">Login is required. New users must be approved by an admin before they can view environment details.</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="loginTabBtn">Login</button>
+      <button class="auth-tab" id="registerTabBtn">Register</button>
+    </div>
+    <form id="loginForm">
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="loginEmail" type="email" required></div>
+      <div class="form-group" style="margin-top:12px"><label class="form-label">Password</label><input class="form-input" id="loginPassword" type="password" required></div>
+      <button class="btn btn-primary" style="margin-top:16px;width:100%;justify-content:center;" type="submit">Login</button>
+    </form>
+    <form id="registerForm" class="hidden">
+      <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="registerName"></div>
+      <div class="form-group" style="margin-top:12px"><label class="form-label">Email</label><input class="form-input" id="registerEmail" type="email" required></div>
+      <div class="form-group" style="margin-top:12px"><label class="form-label">Password</label><input class="form-input" id="registerPassword" type="password" required></div>
+      <button class="btn btn-primary" style="margin-top:16px;width:100%;justify-content:center;" type="submit">Register</button>
+    </form>
+    <div id="authMessage"></div>
+  </div>
+</div>
+
+<div id="protectedApp" class="hidden">
 <div class="topbar">
   <div class="topbar-left">
     <div class="logo">ENV<span>.</span>Navigator</div>
@@ -107,9 +153,35 @@
     </div>
   </div>
   <div class="topbar-right">
+    <div class="user-badge" id="userBadge">Not logged in</div>
     <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="searchInput" class="search" placeholder="Search environments (Ctrl+K)..."></div>
     <button class="btn-icon" id="themeToggle">🌙</button>
+    <button class="btn" id="logoutBtn">Logout</button>
     <button class="btn btn-primary" id="addEnvBtn">➕ Add Environment</button>
+  </div>
+</div>
+
+<div class="subnav">
+  <button class="subnav-btn active" id="navEnvironmentsBtn">Environments</button>
+  <button class="subnav-btn" id="navAdminBtn">Admin Access</button>
+  <button class="subnav-btn" id="navSettingsBtn">Change Password</button>
+</div>
+
+<div class="main hidden" id="adminPanelWrap">
+  <div class="admin-panel">
+    <div class="section-head"><span class="section-title">Admin User Approval</span><div class="section-line"></div></div>
+    <div id="adminUsersContent" class="empty-state">Loading users... <span class="loader"></span></div>
+  </div>
+</div>
+
+<div class="main hidden" id="settingsPanelWrap">
+  <div class="settings-panel">
+    <div class="section-head"><span class="section-title">Account Settings</span><div class="section-line"></div></div>
+    <form id="changePasswordForm" style="max-width:480px;display:flex;flex-direction:column;gap:12px;">
+      <div class="form-group"><label class="form-label">Current Password</label><input class="form-input" id="currentPassword" type="password" required></div>
+      <div class="form-group"><label class="form-label">New Password</label><input class="form-input" id="newPassword" type="password" required></div>
+      <button class="btn btn-primary" type="submit" style="justify-content:center;">Change Password</button>
+    </form>
   </div>
 </div>
 
@@ -118,12 +190,30 @@
 <div class="modal-overlay" id="envModalOverlay"><div class="modal"><div class="modal-header"><div class="modal-title" id="modalTitle">Add Environment</div><button class="modal-close" id="closeModalBtn">&times;</button></div><div class="modal-body"><form id="editForm"><input type="hidden" id="envId"><div class="form-section"><div class="form-section-title">Basic Info</div><div class="form-row"><div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="envName" required></div><div class="form-group"><label class="form-label">Group *</label><select class="form-select" id="envGroup" required><option value="">Select...</option><option value="PROD">PROD</option><option value="UAT">UAT</option><option value="SIT">SIT</option><option value="ST">ST</option><option value="MIG">MIG</option><option value="DEV">DEV</option></select></div></div><div class="form-row"><div class="form-group"><label class="form-label">Dev Alias</label><input class="form-input" id="envDevName"></div><div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="envNotes"></div></div></div><div class="form-section"><div class="form-section-title">URLs</div><div class="form-row"><div class="form-group"><label class="form-label">COM Weblogic Console</label><input class="form-input" id="comConsoleUrl"></div><div class="form-group"><label class="form-label">SOM Weblogic Console</label><input class="form-input" id="somConsoleUrl"></div></div><div class="form-row"><div class="form-group"><label class="form-label">COM Order Management</label><input class="form-input" id="comOrderMgmtUrl"></div><div class="form-group"><label class="form-label">SOM Order Management</label><input class="form-input" id="somOrderMgmtUrl"></div></div><div class="form-row"><div class="form-group"><label class="form-label">COM Orchestration</label><input class="form-input" id="comOrchUrl"></div><div class="form-group"><label class="form-label">SOM Orchestration</label><input class="form-input" id="somOrchUrl"></div></div></div><div class="form-section"><div class="form-section-title">SSH / Logs</div><div class="form-row"><div class="form-group"><label class="form-label">SSH Server Host</label><input class="form-input" id="serverHost"></div><div class="form-group"><label class="form-label">SSH Username</label><input class="form-input" id="serverUser"></div></div><div class="form-row"><div class="form-group full"><label class="form-label">SSH Password</label><input type="password" class="form-input" id="serverPass"></div></div><div class="form-row"><div class="form-group full"><label class="form-label">COM Log Command</label><textarea class="form-textarea" id="comLogCmd"></textarea></div><div class="form-group full"><label class="form-label">SOM Log Command</label><textarea class="form-textarea" id="somLogCmd"></textarea></div></div></div><div class="form-section"><div class="form-section-title">Database Details</div><div class="form-row"><div class="form-group full"><label class="form-label">COM DB Info</label><textarea class="form-textarea" id="comDbInfo"></textarea></div><div class="form-group full"><label class="form-label">SOM DB Info</label><textarea class="form-textarea" id="somDbInfo"></textarea></div></div></div><div class="form-section"><div class="form-section-title">Other Config</div><div class="form-row"><div class="form-group full"><label class="form-label">Host File Entries</label><textarea class="form-textarea" id="hostEntries"></textarea></div><div class="form-group full"><label class="form-label">Other Information</label><textarea class="form-textarea" id="otherInfo"></textarea></div></div></div></form></div><div class="modal-footer"><button class="btn" id="cancelModalBtn">Cancel</button><button class="btn btn-primary" id="saveEnvBtn">Save Environment</button></div></div></div>
 
 <div id="toast" class="toast">Action successful</div>
+</div>
 
 <script>
 let envs = [];
 let currentFilter = 'ALL';
 let searchQuery = '';
+let currentUser = null;
 
+const authApp = document.getElementById('authApp');
+const protectedApp = document.getElementById('protectedApp');
+const loginTabBtn = document.getElementById('loginTabBtn');
+const registerTabBtn = document.getElementById('registerTabBtn');
+const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
+const authMessage = document.getElementById('authMessage');
+const userBadge = document.getElementById('userBadge');
+const logoutBtn = document.getElementById('logoutBtn');
+const adminPanelWrap = document.getElementById('adminPanelWrap');
+const adminUsersContent = document.getElementById('adminUsersContent');
+const settingsPanelWrap = document.getElementById('settingsPanelWrap');
+const changePasswordForm = document.getElementById('changePasswordForm');
+const navEnvironmentsBtn = document.getElementById('navEnvironmentsBtn');
+const navAdminBtn = document.getElementById('navAdminBtn');
+const navSettingsBtn = document.getElementById('navSettingsBtn');
 const mainContent = document.getElementById('mainContent');
 const groupTabsContainer = document.getElementById('groupTabs');
 const searchInput = document.getElementById('searchInput');
@@ -148,6 +238,20 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function normalizeJsonField(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+  return {};
+}
+
 function loadTheme() {
   const saved = localStorage.getItem('env_nav_theme') || 'dark';
   document.documentElement.setAttribute('data-theme', saved);
@@ -166,6 +270,173 @@ function showToast(msg) {
   toastEl.textContent = msg;
   toastEl.classList.add('show');
   setTimeout(() => toastEl.classList.remove('show'), 3000);
+}
+
+function setAuthMode(mode) {
+  const isLogin = mode === 'login';
+  loginTabBtn.classList.toggle('active', isLogin);
+  registerTabBtn.classList.toggle('active', !isLogin);
+  loginForm.classList.toggle('hidden', !isLogin);
+  registerForm.classList.toggle('hidden', isLogin);
+  authMessage.innerHTML = '';
+}
+
+function setAuthMessage(message, type = 'error') {
+  authMessage.className = type === 'success' ? 'auth-success' : 'auth-error';
+  authMessage.textContent = message;
+}
+
+function renderProtectedState() {
+  const isAuthed = !!currentUser && currentUser.status === 'approved';
+  authApp.classList.toggle('hidden', isAuthed);
+  protectedApp.classList.toggle('hidden', !isAuthed);
+
+  if (!isAuthed) return;
+
+  userBadge.textContent = `${currentUser.full_name || currentUser.email} • ${currentUser.role}`;
+  navAdminBtn.classList.toggle('hidden', currentUser.role !== 'admin');
+  showSection('environments');
+}
+
+function showSection(section) {
+  const isAdmin = currentUser?.role === 'admin';
+  mainContent.classList.toggle('hidden', section !== 'environments');
+  settingsPanelWrap.classList.toggle('hidden', section !== 'settings');
+  adminPanelWrap.classList.toggle('hidden', section !== 'admin' || !isAdmin);
+
+  navEnvironmentsBtn.classList.toggle('active', section === 'environments');
+  navSettingsBtn.classList.toggle('active', section === 'settings');
+  navAdminBtn.classList.toggle('active', section === 'admin');
+}
+
+async function checkSession() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) throw new Error('Not logged in');
+    const payload = await res.json();
+    currentUser = payload.user;
+    renderProtectedState();
+    if (currentUser.role === 'admin') await loadAdminUsers();
+    await fetchData();
+  } catch (_) {
+    currentUser = null;
+    renderProtectedState();
+  }
+}
+
+function renderAdminUsers(users) {
+  if (!users.length) {
+    adminUsersContent.innerHTML = '<div class="empty-state">No users found.</div>';
+    return;
+  }
+
+  adminUsersContent.innerHTML = `<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${users.map((user) => `
+    <tr>
+      <td>${escapeHtml(user.full_name || '-')}</td>
+      <td>${escapeHtml(user.email)}</td>
+      <td>${escapeHtml(user.role)}</td>
+      <td><span class="status-pill status-${escapeHtml(user.status)}">${escapeHtml(user.status)}</span></td>
+      <td>
+        ${user.status !== 'approved' ? `<button class="btn" onclick="updateUserStatus('${user.id}','approved','${user.role || 'user'}')">Approve</button>` : ''}
+        ${user.status !== 'rejected' ? `<button class="btn" onclick="updateUserStatus('${user.id}','rejected','${user.role || 'user'}')">Reject</button>` : ''}
+      </td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadAdminUsers() {
+  try {
+    const res = await fetch('/api/auth/users');
+    if (!res.ok) throw new Error('Failed to load users');
+    const users = await res.json();
+    renderAdminUsers(users);
+  } catch (err) {
+    adminUsersContent.innerHTML = '<div class="empty-state" style="color:var(--danger)">Failed to load admin users.</div>';
+  }
+}
+
+async function updateUserStatus(id, status, role) {
+  try {
+    const res = await fetch('/api/auth/users', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status, role })
+    });
+    if (!res.ok) throw new Error('Failed to update user');
+    await loadAdminUsers();
+    showToast(`User ${status}`);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: loginEmail.value, password: loginPassword.value })
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || 'Login failed');
+    currentUser = payload.user;
+    renderProtectedState();
+    if (currentUser.role === 'admin') await loadAdminUsers();
+    await fetchData();
+  } catch (err) {
+    setAuthMessage(err.message, 'error');
+  }
+}
+
+async function handleRegister(event) {
+  event.preventDefault();
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        full_name: registerName.value,
+        email: registerEmail.value,
+        password: registerPassword.value,
+      })
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || 'Registration failed');
+    setAuthMessage(payload.requiresApproval ? 'Registered successfully. Wait for admin approval.' : 'Admin account created. You can log in now.', 'success');
+    setAuthMode('login');
+  } catch (err) {
+    setAuthMessage(err.message, 'error');
+  }
+}
+
+async function handleLogout() {
+  document.cookie = 'env_nav_session=; Path=/; Max-Age=0; SameSite=Lax';
+  currentUser = null;
+  envs = [];
+  settingsPanelWrap.classList.add('hidden');
+  adminPanelWrap.classList.add('hidden');
+  mainContent.classList.remove('hidden');
+  renderProtectedState();
+}
+
+async function handleChangePassword(event) {
+  event.preventDefault();
+  try {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentPassword: currentPassword.value,
+        newPassword: newPassword.value,
+      })
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || 'Failed to change password');
+    changePasswordForm.reset();
+    showToast('Password changed successfully');
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 async function fetchData() {
@@ -187,9 +458,21 @@ function makeLink(url) {
   return `<div class="link-row"><a href="${url}" target="_blank" class="link-item">${escapeHtml(url)}</a><button class="copy-btn" onclick="copyText(this.previousElementSibling)">📋</button></div>`;
 }
 
+function parseLogCommands(value) {
+  if (!value) return [];
+
+  const raw = String(value).trim();
+  if (!raw) return [];
+
+  return raw
+    .split(/\r?\n\s*---+\s*\r?\n|\r?\n\s*===+\s*\r?\n|\r?\n\s*\|\|\|\s*\r?\n|\s+---+\s+|\s+===+\s+|\s+\|\|\|\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function generateCardHTML(env) {
-  const com = env.com_data || {};
-  const som = env.som_data || {};
+  const com = normalizeJsonField(env.com_data);
+  const som = normalizeJsonField(env.som_data);
   const hasServer = !!env.server_host;
   return `<div class="env-card card-${env.group_name}">
     <div class="card-header">
@@ -207,7 +490,7 @@ function generateCardHTML(env) {
       <div class="grid-row"><div class="grid-cell"><div class="detail-title">COM Weblogic</div>${makeLink(com.consoleUrl)}</div><div class="grid-cell"><div class="detail-title">SOM Weblogic</div>${makeLink(som.consoleUrl)}</div></div>
       <div class="grid-row"><div class="grid-cell"><div class="detail-title">COM Order Management</div>${makeLink(com.orderMgmtUrl)}</div><div class="grid-cell"><div class="detail-title">SOM Order Management</div>${makeLink(som.orderMgmtUrl)}</div></div>
       <div class="grid-row"><div class="grid-cell"><div class="detail-title">COM Orchestration</div>${makeLink(com.orchestrationUrl)}</div><div class="grid-cell"><div class="detail-title">SOM Orchestration</div>${makeLink(som.orchestrationUrl)}</div></div>
-      <div class="grid-row"><div class="grid-cell"><button class="btn-log" ${!hasServer || !com.logCommand ? 'disabled' : `onclick="downloadBat('${env.id}','COM')"`}>📥 COM Logs</button></div><div class="grid-cell"><button class="btn-log" ${!hasServer || !som.logCommand ? 'disabled' : `onclick="downloadBat('${env.id}','SOM')"`}>📥 SOM Logs</button></div></div>
+      <div class="grid-row"><div class="grid-cell"><button class="btn-log" ${!com.logCommand ? 'disabled' : `onclick="downloadBat('${env.id}','COM')"`}>📥 COM Logs</button></div><div class="grid-cell"><button class="btn-log" ${!som.logCommand ? 'disabled' : `onclick="downloadBat('${env.id}','SOM')"`}>📥 SOM Logs</button></div></div>
     </div>
     <button class="show-more-btn" onclick="toggleDetails('${env.id}')">Show More Details ▾</button>
     <div class="more-details" id="details-${env.id}">
@@ -268,8 +551,8 @@ function openModal(env = null) {
     serverHost.value = env.server_host || '';
     serverUser.value = env.server_user || '';
     serverPass.value = env.server_password || '';
-    const com = env.com_data || {};
-    const som = env.som_data || {};
+    const com = normalizeJsonField(env.com_data);
+    const som = normalizeJsonField(env.som_data);
     comConsoleUrl.value = com.consoleUrl || '';
     somConsoleUrl.value = som.consoleUrl || '';
     comOrderMgmtUrl.value = com.orderMgmtUrl || '';
@@ -380,29 +663,41 @@ function downloadBat(envId, type) {
   const env = envs.find((entry) => entry.id === envId);
   if (!env) return;
 
-  const data = type === 'COM' ? env.com_data : env.som_data;
-  const cmd = data?.logCommand;
-  if (!cmd) {
+  const data = normalizeJsonField(type === 'COM' ? env.com_data : env.som_data);
+  const commands = parseLogCommands(data?.logCommand);
+  if (!commands.length) {
     alert('Missing Log Command for this component.');
     return;
   }
 
-  const trimmedCmd = String(cmd).trim();
-  const batContent = trimmedCmd.startsWith('@echo off') ? trimmedCmd : `@echo off\n${trimmedCmd}\n`;
-
-  const blob = new Blob([batContent], { type: 'application/bat' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.style.display = 'none';
-  a.href = url;
-  a.download = `logs_${env.name.replace(/[^a-zA-Z0-9]/g, '_')}_${type}.bat`;
-  document.body.appendChild(a);
-  a.click();
-  URL.revokeObjectURL(url);
-  a.remove();
+  commands.forEach((cmd, index) => {
+    const trimmedCmd = String(cmd).trim();
+    const batContent = trimmedCmd.startsWith('@echo off') ? trimmedCmd : `@echo off\n${trimmedCmd}\n`;
+    const blob = new Blob([batContent], { type: 'application/bat' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `logs_${env.name.replace(/[^a-zA-Z0-9]/g, '_')}_${type}_${index + 1}.bat`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 1000);
+  });
 }
 
 function setupEventListeners() {
+  loginTabBtn.addEventListener('click', () => setAuthMode('login'));
+  registerTabBtn.addEventListener('click', () => setAuthMode('register'));
+  loginForm.addEventListener('submit', handleLogin);
+  registerForm.addEventListener('submit', handleRegister);
+  changePasswordForm.addEventListener('submit', handleChangePassword);
+  logoutBtn.addEventListener('click', handleLogout);
+  navEnvironmentsBtn.addEventListener('click', () => showSection('environments'));
+  navAdminBtn.addEventListener('click', () => showSection('admin'));
+  navSettingsBtn.addEventListener('click', () => showSection('settings'));
   themeToggle.addEventListener('click', toggleTheme);
   groupTabsContainer.addEventListener('click', (e) => {
     const tab = e.target.closest('.tab');
@@ -435,11 +730,19 @@ function setupEventListeners() {
 
 loadTheme();
 setupEventListeners();
-fetchData();
-setInterval(fetchData, 30000);
+setAuthMode('login');
+checkSession();
+setInterval(() => { if (currentUser?.status === 'approved') fetchData(); }, 30000);
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
 
 
 
