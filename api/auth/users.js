@@ -68,6 +68,10 @@ module.exports = async function handler(req, res) {
         return sendJson(res, 400, { error: 'User id and status are required.' });
       }
 
+      if (currentUser.id === userId && status !== 'approved') {
+        return sendJson(res, 400, { error: 'You cannot revoke or reject your own admin access.' });
+      }
+
       const updatePayload = {
         status,
         role: role || 'user',

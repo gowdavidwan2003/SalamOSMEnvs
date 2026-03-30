@@ -353,7 +353,7 @@ function renderAdminUsers(users) {
       <td><span class="status-pill status-${escapeHtml(user.status)}">${escapeHtml(user.status)}</span></td>
       <td>
         ${user.status !== 'approved' ? `<button class="btn" onclick="updateUserStatus('${user.id}','approved','${user.role || 'user'}')">Approve</button>` : ''}
-        ${user.status !== 'rejected' ? `<button class="btn" onclick="updateUserStatus('${user.id}','rejected','${user.role || 'user'}')">Reject</button>` : ''}
+        ${user.id === currentUser?.id ? '<span style="color:var(--text-muted);font-size:12px;font-weight:600;">Self protected</span>' : (user.status !== 'rejected' ? `<button class="btn" onclick="updateUserStatus('${user.id}','rejected','${user.role || 'user'}')">Reject</button>` : '')}
       </td>
     </tr>`).join('')}</tbody></table>`;
 }
@@ -493,15 +493,27 @@ function isRecentlyUpdated(updatedAt) {
   return Date.now() - updatedTime <= sevenDaysMs;
 }
 
+function getRecentUpdateLabel(updatedAt) {
+  if (!isRecentlyUpdated(updatedAt)) return '';
+  const updatedTime = new Date(updatedAt).getTime();
+  const diffMs = Date.now() - updatedTime;
+  const days = Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
+
+  if (days === 0) return '⚠ Updated today';
+  if (days === 1) return '⚠ Updated 1 day ago';
+  return `⚠ Updated ${days} days ago`;
+}
+
 function generateCardHTML(env) {
   const com = normalizeJsonField(env.com_data);
   const som = normalizeJsonField(env.som_data);
   const hasServer = !!env.server_host;
   const recentlyUpdated = isRecentlyUpdated(env.updated_at);
+  const recentUpdateLabel = getRecentUpdateLabel(env.updated_at);
   return `<div class="env-card card-${env.group_name}">
     <div class="card-header">
       <div class="card-title-wrap">
-        <div class="card-title-row"><div class="card-title">${escapeHtml(env.name)} ${env.dev_name ? `(${escapeHtml(env.dev_name)})` : ''}</div>${recentlyUpdated ? '<span class="update-badge">⚠ Updated < 7 days</span>' : ''}</div>
+        <div class="card-title-row"><div class="card-title">${escapeHtml(env.name)} ${env.dev_name ? `(${escapeHtml(env.dev_name)})` : ''}</div>${recentlyUpdated ? `<span class="update-badge">${escapeHtml(recentUpdateLabel)}</span>` : ''}</div>
         <div class="card-subtitle">${escapeHtml(env.notes || 'No notes')}</div>
       </div>
       <div class="card-actions">
@@ -760,6 +772,8 @@ setInterval(() => { if (currentUser?.status === 'approved') fetchData(); }, 3000
 </script>
 </body>
 </html>
+
+
 
 
 
