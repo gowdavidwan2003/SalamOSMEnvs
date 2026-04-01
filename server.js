@@ -7,6 +7,7 @@ const seedHandler = require('./api/seed.js');
 const registerHandler = require('./api/auth/register.js');
 const loginHandler = require('./api/auth/login.js');
 const meHandler = require('./api/auth/me.js');
+const pinsHandler = require('./api/auth/pins.js');
 const usersHandler = require('./api/auth/users.js');
 const changePasswordHandler = require('./api/auth/change-password.js');
 
@@ -44,6 +45,9 @@ app.post('/api/auth/register', (req, res) => registerHandler(req, res));
 app.post('/api/auth/login', (req, res) => loginHandler(req, res));
 app.post('/api/auth/change-password', (req, res) => changePasswordHandler(req, res));
 app.get('/api/auth/me', (req, res) => meHandler(req, res));
+app.route('/api/auth/pins')
+  .get((req, res) => pinsHandler(req, res))
+  .put((req, res) => pinsHandler(req, res));
 app.route('/api/auth/users')
   .get((req, res) => usersHandler(req, res))
   .put((req, res) => usersHandler(req, res));

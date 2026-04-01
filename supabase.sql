@@ -74,5 +74,16 @@ CREATE TABLE IF NOT EXISTS public.app_sessions (
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.app_settings (
+  key text PRIMARY KEY,
+  value jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+INSERT INTO public.app_settings (key, value)
+VALUES ('shared_pins', '[]'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
 ALTER TABLE public.app_users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_settings DISABLE ROW LEVEL SECURITY;

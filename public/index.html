@@ -113,7 +113,20 @@
   .developer-links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; font-size: 13px; }
   .developer-links a { color: var(--primary); text-decoration: none; }
   .doc-links { display: flex; flex-direction: column; gap: 8px; }
+  .pinned-toolbar { margin: 14px 24px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); box-shadow: var(--shadow); display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .pinned-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); padding-top: 8px; }
+  .pinned-list { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; }
+  .pinned-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--input-bg); color: var(--text-main); cursor: pointer; font-size: 12px; font-weight: 600; }
+  .pinned-chip:hover { border-color: var(--primary); color: var(--primary); }
+  .pinned-chip-alias { color: var(--text-muted); font-family: 'IBM Plex Mono'; font-size: 11px; font-weight: 500; }
+  .pin-btn-active { color: var(--primary); }
+  .env-card.focused-card { outline: 3px solid rgba(96,165,250,0.95); outline-offset: 3px; box-shadow: 0 0 0 3px rgba(59,130,246,0.28), 0 0 30px rgba(96,165,250,0.55), 0 0 60px rgba(59,130,246,0.35); animation: focusedPulse 1.15s ease-in-out 3; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes focusedPulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 3px rgba(59,130,246,0.18), 0 0 18px rgba(96,165,250,0.35), 0 0 34px rgba(59,130,246,0.18); }
+    50% { transform: scale(1.015); box-shadow: 0 0 0 4px rgba(96,165,250,0.35), 0 0 42px rgba(147,197,253,0.95), 0 0 80px rgba(59,130,246,0.65); }
+    100% { transform: scale(1); box-shadow: 0 0 0 3px rgba(59,130,246,0.18), 0 0 18px rgba(96,165,250,0.35), 0 0 34px rgba(59,130,246,0.18); }
+  }
   @media (max-width: 1400px) { .env-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 900px) { .env-grid, .grid-header, .grid-row, .form-row { grid-template-columns: 1fr; } .col-title:first-child, .grid-cell:first-child { border-right: none; } }
 </style>
@@ -167,6 +180,11 @@
     <button class="btn" id="logoutBtn">Logout</button>
     <button class="btn btn-primary" id="addEnvBtn">➕ Add Environment</button>
   </div>
+</div>
+
+<div class="pinned-toolbar hidden" id="pinnedToolbar">
+  <div class="pinned-label">Pinned</div>
+  <div class="pinned-list" id="pinnedList"></div>
 </div>
 
 <div class="subnav">
@@ -294,6 +312,10 @@ let currentFilter = 'ALL';
 let searchQuery = '';
 let currentUser = null;
 let currentView = 'active';
+let activeEnvsCache = [];
+let pinnedEnvIds = loadPinnedEnvIdsFromStorage();
+let pendingFocusEnvId = null;
+let pinSyncFallbackNoticeShown = false;
 
 const authApp = document.getElementById('authApp');
 const protectedApp = document.getElementById('protectedApp');
@@ -316,6 +338,8 @@ const mainContent = document.getElementById('mainContent');
 const groupTabsContainer = document.getElementById('groupTabs');
 const searchInput = document.getElementById('searchInput');
 const themeToggle = document.getElementById('themeToggle');
+const pinnedToolbar = document.getElementById('pinnedToolbar');
+const pinnedList = document.getElementById('pinnedList');
 const toastEl = document.getElementById('toast');
 const visibleCountEl = document.getElementById('visibleCount');
 const totalCountEl = document.getElementById('totalCount');
@@ -410,6 +434,173 @@ function formatDateLabel(value) {
   return parsed.toLocaleDateString();
 }
 
+function loadPinnedEnvIdsFromStorage() {
+  try {
+    const raw = localStorage.getItem('env_nav_pins');
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((entry) => typeof entry === 'string') : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function savePinnedEnvIdsToStorage() {
+  localStorage.setItem('env_nav_pins', JSON.stringify(pinnedEnvIds));
+}
+
+async function loadPinnedEnvIdsFromServer() {
+  if (!currentUser?.id) return;
+
+  try {
+    const res = await fetch('/api/auth/pins');
+    const payload = await res.json();
+
+    if (!res.ok) {
+      throw new Error(payload.error || 'Failed to load pinned environments');
+    }
+
+    if (payload.persistence === 'local') {
+      if (payload.warning && !pinSyncFallbackNoticeShown) {
+        showToast('Shared pins are local only until the auth migration SQL is run');
+        pinSyncFallbackNoticeShown = true;
+      }
+      renderPinnedBar();
+      renderCards();
+      return;
+    }
+
+    if (Array.isArray(payload.pinnedEnvIds)) {
+      pinnedEnvIds = payload.pinnedEnvIds;
+      savePinnedEnvIdsToStorage();
+      renderPinnedBar();
+      renderCards();
+    }
+  } catch (error) {
+    console.warn('Using local pinned environments only:', error);
+    renderPinnedBar();
+  }
+}
+
+async function syncPinnedEnvIdsToServer() {
+  savePinnedEnvIdsToStorage();
+
+  if (!currentUser?.id) return;
+
+  try {
+    const res = await fetch('/api/auth/pins', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinnedEnvIds })
+    });
+
+    const payload = await res.json();
+
+    if (!res.ok) {
+      if (res.status === 409) {
+        if (!pinSyncFallbackNoticeShown) {
+          showToast('Shared pins are local only until the auth migration SQL is run');
+          pinSyncFallbackNoticeShown = true;
+        }
+        return;
+      }
+
+      throw new Error(payload.error || 'Failed to sync pinned environments');
+    }
+
+    pinnedEnvIds = Array.isArray(payload.pinnedEnvIds) ? payload.pinnedEnvIds : pinnedEnvIds;
+    savePinnedEnvIdsToStorage();
+  } catch (error) {
+    console.warn('Pin sync failed, keeping local pins:', error);
+  }
+}
+
+function isPinnedEnv(id) {
+  return pinnedEnvIds.includes(id);
+}
+
+function getKnownEnvironments() {
+  const byId = new Map();
+  activeEnvsCache.forEach((env) => byId.set(env.id, env));
+  envs.forEach((env) => byId.set(env.id, env));
+  return byId;
+}
+
+function getPinnedEnvironments() {
+  const knownEnvironments = getKnownEnvironments();
+  return pinnedEnvIds.map((id) => knownEnvironments.get(id)).filter(Boolean);
+}
+
+function renderPinnedBar() {
+  const pinnedEnvironments = getPinnedEnvironments();
+  pinnedToolbar.classList.toggle('hidden', pinnedEnvironments.length === 0);
+
+  if (!pinnedEnvironments.length) {
+    pinnedList.innerHTML = '';
+    return;
+  }
+
+  pinnedList.innerHTML = pinnedEnvironments.map((env) => `
+    <button class="pinned-chip" type="button" onclick="focusPinnedEnvironment('${env.id}')" title="Open ${escapeHtml(env.name)} details">
+      <span>${escapeHtml(env.name)}</span>
+      ${env.dev_name ? `<span class="pinned-chip-alias">${escapeHtml(env.dev_name)}</span>` : ''}
+    </button>
+  `).join('');
+}
+
+function setGroupFilter(groupName) {
+  currentFilter = groupName || 'ALL';
+  document.querySelectorAll('.tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.group === currentFilter);
+  });
+}
+
+function applyPendingFocus() {
+  if (!pendingFocusEnvId) return;
+
+  const card = document.getElementById(`env-card-${pendingFocusEnvId}`);
+  if (!card) return;
+
+  card.classList.add('focused-card');
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => card.classList.remove('focused-card'), 3600);
+  pendingFocusEnvId = null;
+}
+
+async function togglePinnedEnvironment(id) {
+  if (isPinnedEnv(id)) {
+    pinnedEnvIds = pinnedEnvIds.filter((entry) => entry !== id);
+    showToast('Environment unpinned');
+  } else {
+    pinnedEnvIds = [id, ...pinnedEnvIds.filter((entry) => entry !== id)].slice(0, 8);
+    showToast('Environment pinned to header');
+  }
+
+  savePinnedEnvIdsToStorage();
+  renderPinnedBar();
+  renderCards();
+  await syncPinnedEnvIdsToServer();
+}
+
+function focusPinnedEnvironment(id) {
+  const knownEnvironment = getKnownEnvironments().get(id);
+  if (!knownEnvironment) {
+    showToast('Pinned environment is not available right now');
+    return;
+  }
+
+  pendingFocusEnvId = id;
+  searchQuery = '';
+  searchInput.value = '';
+  setGroupFilter(knownEnvironment.group_name);
+
+  if (currentView !== 'active') {
+    showSection('environments');
+    return;
+  }
+
+  renderCards();
+}
+
 function loadTheme() {
   const saved = localStorage.getItem('env_nav_theme') || 'dark';
   document.documentElement.setAttribute('data-theme', saved);
@@ -453,6 +644,7 @@ function renderProtectedState() {
 
   userBadge.textContent = `${currentUser.full_name || currentUser.email} • ${currentUser.role}`;
   navAdminBtn.classList.toggle('hidden', currentUser.role !== 'admin');
+  renderPinnedBar();
   showSection('environments');
 }
 
@@ -484,6 +676,7 @@ async function checkSession() {
     const payload = await res.json();
     currentUser = payload.user;
     renderProtectedState();
+    await loadPinnedEnvIdsFromServer();
     if (currentUser.role === 'admin') await loadAdminUsers();
   } catch (_) {
     currentUser = null;
@@ -548,6 +741,7 @@ async function handleLogin(event) {
     if (!res.ok) throw new Error(payload.error || 'Login failed');
     currentUser = payload.user;
     renderProtectedState();
+    await loadPinnedEnvIdsFromServer();
     if (currentUser.role === 'admin') await loadAdminUsers();
   } catch (err) {
     setAuthMessage(err.message, 'error');
@@ -580,9 +774,12 @@ async function handleLogout() {
   currentUser = null;
   currentView = 'active';
   envs = [];
+  activeEnvsCache = [];
+  pinSyncFallbackNoticeShown = false;
   settingsPanelWrap.classList.add('hidden');
   adminPanelWrap.classList.add('hidden');
   mainContent.classList.remove('hidden');
+  pinnedEnvIds = loadPinnedEnvIdsFromStorage();
   renderProtectedState();
 }
 
@@ -611,6 +808,10 @@ async function fetchData() {
     const res = await fetch(`/api/environments?view=${encodeURIComponent(currentView)}`);
     if (!res.ok) throw new Error('Failed to fetch data');
     envs = await res.json();
+    if (currentView === 'active') {
+      activeEnvsCache = [...envs];
+    }
+    renderPinnedBar();
     renderCards();
   } catch (err) {
     console.error(err);
@@ -679,14 +880,16 @@ function generateCardHTML(env) {
   const recentlyUpdated = isRecentlyUpdated(env.updated_at);
   const recentUpdateLabel = getRecentUpdateLabel(env.updated_at);
   const isArchived = !!env.archived_at;
+  const isPinned = isPinnedEnv(env.id);
   const archivedLabel = isArchived ? `🗃 Archived${formatDateLabel(env.archived_at) ? ` ${formatDateLabel(env.archived_at)}` : ''}` : '';
-  return `<div class="env-card card-${env.group_name}">
+  return `<div class="env-card card-${env.group_name}" id="env-card-${env.id}">
     <div class="card-header">
       <div class="card-title-wrap">
         <div class="card-title-row"><div class="card-title">${escapeHtml(env.name)} ${env.dev_name ? `(${escapeHtml(env.dev_name)})` : ''}</div>${isArchived ? `<span class="archive-badge">${escapeHtml(archivedLabel)}</span>` : (recentlyUpdated ? `<span class="update-badge">${escapeHtml(recentUpdateLabel)}</span>` : '')}</div>
         <div class="card-subtitle">${escapeHtml(env.notes || 'No notes')}</div>
       </div>
       <div class="card-actions">
+        ${!isArchived ? `<button class="btn-icon ${isPinned ? 'pin-btn-active' : ''}" title="${isPinned ? 'Unpin from header' : 'Pin to header'}" onclick="togglePinnedEnvironment('${env.id}')">📌</button>` : ''}
         ${isArchived ? `<button class="btn-icon" title="Restore environment" onclick="restoreEnv('${env.id}')">↩️</button>` : `<button class="btn-icon" title="Edit environment" onclick="editEnv('${env.id}')">✎</button><button class="btn-icon" title="Archive environment" onclick="deleteEnv('${env.id}')">Archive</button>`}
       </div>
     </div>
@@ -732,6 +935,8 @@ function renderCards() {
     section.innerHTML = `<div class="section-head"><span class="dot dot-${groupName}"></span><span class="section-title">${groupName} (${groupEnvs.length})</span><div class="section-line"></div></div><div class="env-grid">${groupEnvs.map(generateCardHTML).join('')}</div>`;
     mainContent.appendChild(section);
   });
+
+  applyPendingFocus();
 }
 
 function toggleDetails(id) {
@@ -853,6 +1058,12 @@ async function deleteEnv(id) {
   try {
     const res = await fetch(`/api/environments/${id}?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to delete');
+    if (isPinnedEnv(id)) {
+      pinnedEnvIds = pinnedEnvIds.filter((entry) => entry !== id);
+      savePinnedEnvIdsToStorage();
+      renderPinnedBar();
+      await syncPinnedEnvIdsToServer();
+    }
     await fetchData();
     showToast('Environment archived');
   } catch (err) {
@@ -930,9 +1141,7 @@ function setupEventListeners() {
   groupTabsContainer.addEventListener('click', (e) => {
     const tab = e.target.closest('.tab');
     if (!tab) return;
-    document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
-    tab.classList.add('active');
-    currentFilter = tab.dataset.group;
+    setGroupFilter(tab.dataset.group);
     renderCards();
   });
 
@@ -960,10 +1169,20 @@ loadTheme();
 setupEventListeners();
 setAuthMode('login');
 checkSession();
-setInterval(() => { if (currentUser?.status === 'approved') fetchData(); }, 30000);
+setInterval(() => {
+  if (currentUser?.status === 'approved') {
+    fetchData();
+    loadPinnedEnvIdsFromServer();
+  }
+}, 30000);
 </script>
 </body>
 </html>
+
+
+
+
+
 
 
 

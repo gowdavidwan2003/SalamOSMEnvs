@@ -16,6 +16,7 @@ The application helps a team:
 - store COM and SOM specific data separately
 - save host entries, DB info, machine details, and other notes
 - store environment sheet links and related document/runbook links
+- pin frequently used environments in the header for quick access
 - download BAT files for COM/SOM log commands
 - support multiple log downloads from one field
 - visibly highlight recently updated environments
@@ -104,7 +105,18 @@ If an environment was updated within the last 7 days, the card shows a visible w
 ### 8. Theme support
 The application supports dark and light themes.
 
-### 9. Archive and restore flow
+### 9. Pinned environments
+Users can pin their most-used environments into the header for faster access.
+
+Behavior implemented:
+
+- pinned items show only the environment name and dev alias
+- clicking a pinned item automatically navigates to that environment card
+- the environment card is brought into view without auto-expanding the extra details section
+- pins are shared across approved users after running the latest auth migration SQL
+- local browser storage is used as a fallback until the auth migration is applied
+
+### 10. Archive and restore flow
 Environments are soft-deleted.
 
 Behavior implemented:
@@ -113,7 +125,7 @@ Behavior implemented:
 - users can switch to an archive view
 - archived environments can be restored back to the active list
 
-### 10. Admin-controlled access
+### 11. Admin-controlled access
 The app includes a simple application-level authentication model.
 
 Rules:
@@ -122,10 +134,10 @@ Rules:
 - new users cannot access environments until approved by an admin
 - admin users can approve or reject other users
 
-### 11. Password management
+### 12. Password management
 Approved logged-in users can change their password from a dedicated Change Password section.
 
-### 12. Environment sheet and documentation links
+### 13. Environment sheet and documentation links
 Each environment can now store:
 
 - a dedicated environment sheet URL
@@ -136,7 +148,7 @@ Document links can be entered as either:
 - `Label | URL`
 - or just `URL`
 
-### 13. Discoverable navigation for protected features
+### 14. Discoverable navigation for protected features
 Once logged in, users see separate navigation buttons for:
 
 - Environments
@@ -224,6 +236,9 @@ There are **two SQL setup files**.
 If your database is already set up and you only want the new archive/document-link feature columns, you can run:
 
 - `supabase_feature_migration.sql`
+- `supabase_shared_pins_migration.sql` (for shared pins only)
+
+That migration now also enables shared pinned environments across browsers and users.
 
 ### 1. Main environment schema
 Run:
@@ -233,6 +248,7 @@ Run:
 For already-existing databases that only need the latest extra fields, run instead:
 
 - `supabase_feature_migration.sql`
+- `supabase_shared_pins_migration.sql` (if you only want shared pin support)
 
 This creates the `environments` table and related environment fields.
 
