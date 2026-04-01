@@ -20,6 +20,84 @@ function normalizeObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
 }
 
+function normalizeDocumentLinks(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const url = normalizeText(entry);
+        return url ? { label: null, url } : null;
+      }
+
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null;
+      }
+
+      const label = normalizeText(entry.label);
+      const url = normalizeText(entry.url);
+
+      if (!url) {
+        return null;
+      }
+
+      return { label, url };
+    })
+    .filter(Boolean);
+}
+
+function isMissingColumnError(error, columnName) {
+  return error?.code === '42703' && String(error?.message || '').includes(`.${columnName}`);
+}
+
+function isExtendedSchemaError(error) {
+  if (error?.code !== '42703') {
+    return false;
+  }
+
+  const message = String(error?.message || '');
+  return ['archived_at', 'env_sheet_url', 'document_links'].some((columnName) => message.includes(`.${columnName}`));
+}
+
+function withCompatibilityDefaults(row) {
+  return {
+    ...row,
+    env_sheet_url: row?.env_sheet_url || null,
+    document_links: Array.isArray(row?.document_links) ? row.document_links : [],
+    archived_at: row?.archived_at || null,
+  };
+}
+
+function withCompatibilityDefaultsForRows(rows = []) {
+  return rows.map(withCompatibilityDefaults);
+}
+
+function getSchemaUpdateMessage() {
+  return 'Database schema update required. Run the new migration SQL (supabase_feature_migration.sql) or re-run the updated supabase.sql in Supabase.';
+}
+
+function stripExtendedSchemaFields(payload = {}) {
+  return {
+    name: payload.name,
+    dev_name: payload.dev_name,
+    group_name: payload.group_name,
+    notes: payload.notes,
+    server_host: payload.server_host,
+    server_user: payload.server_user,
+    server_password: payload.server_password,
+    com_data: payload.com_data,
+    som_data: payload.som_data,
+    host_entries: payload.host_entries,
+    other_info: payload.other_info,
+  };
+}
+
+function payloadUsesExtendedSchema(payload = {}) {
+  return Boolean(normalizeText(payload.env_sheet_url)) || normalizeDocumentLinks(payload.document_links).length > 0;
+}
+
 function validatePayload(payload = {}) {
   const normalizedPayload = {
     name: normalizeText(payload.name),
@@ -33,6 +111,8 @@ function validatePayload(payload = {}) {
     som_data: normalizeObject(payload.som_data),
     host_entries: normalizeText(payload.host_entries),
     other_info: normalizeText(payload.other_info),
+    env_sheet_url: normalizeText(payload.env_sheet_url),
+    document_links: normalizeDocumentLinks(payload.document_links),
   };
 
   const validationErrors = [];
@@ -60,14 +140,41 @@ module.exports = async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const { data, error } = await supabase
+      const view = String(req.query?.view || 'active').toLowerCase();
+      let query = supabase
         .from('environments')
         .select('*')
         .order('group_name', { ascending: true })
         .order('name', { ascending: true });
 
+      if (view === 'archived') {
+        query = query.not('archived_at', 'is', null);
+      } else if (view !== 'all') {
+        query = query.is('archived_at', null);
+      }
+
+      const { data, error } = await query;
+
+      if (error && isMissingColumnError(error, 'archived_at')) {
+        const fallbackResult = await supabase
+          .from('environments')
+          .select('*')
+          .order('group_name', { ascending: true })
+          .order('name', { ascending: true });
+
+        if (fallbackResult.error) throw fallbackResult.error;
+
+        const compatibleRows = withCompatibilityDefaultsForRows(fallbackResult.data || []);
+
+        if (view === 'archived') {
+          return sendJson(res, 200, []);
+        }
+
+        return sendJson(res, 200, compatibleRows);
+      }
+
       if (error) throw error;
-      return sendJson(res, 200, data);
+      return sendJson(res, 200, withCompatibilityDefaultsForRows(data || []));
     }
 
     if (req.method === 'POST') {
@@ -82,8 +189,26 @@ module.exports = async function handler(req, res) {
         .select()
         .single();
 
-      if (error) throw error;
-      return sendJson(res, 201, data);
+      if (error) {
+        if (isExtendedSchemaError(error)) {
+          if (payloadUsesExtendedSchema(req.body)) {
+            return sendJson(res, 409, { error: getSchemaUpdateMessage() });
+          }
+
+          const legacyResult = await supabase
+            .from('environments')
+            .insert([stripExtendedSchemaFields(normalizedPayload)])
+            .select()
+            .single();
+
+          if (legacyResult.error) throw legacyResult.error;
+          return sendJson(res, 201, withCompatibilityDefaults(legacyResult.data));
+        }
+
+        throw error;
+      }
+
+      return sendJson(res, 201, withCompatibilityDefaults(data));
     }
 
     res.setHeader('Allow', ['GET', 'POST']);

@@ -20,6 +20,81 @@ function normalizeObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
 }
 
+function normalizeDocumentLinks(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const url = normalizeText(entry);
+        return url ? { label: null, url } : null;
+      }
+
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null;
+      }
+
+      const label = normalizeText(entry.label);
+      const url = normalizeText(entry.url);
+
+      if (!url) {
+        return null;
+      }
+
+      return { label, url };
+    })
+    .filter(Boolean);
+}
+
+function isMissingColumnError(error, columnName) {
+  return error?.code === '42703' && String(error?.message || '').includes(`.${columnName}`);
+}
+
+function isExtendedSchemaError(error) {
+  if (error?.code !== '42703') {
+    return false;
+  }
+
+  const message = String(error?.message || '');
+  return ['archived_at', 'env_sheet_url', 'document_links'].some((columnName) => message.includes(`.${columnName}`));
+}
+
+function withCompatibilityDefaults(row) {
+  return {
+    ...row,
+    env_sheet_url: row?.env_sheet_url || null,
+    document_links: Array.isArray(row?.document_links) ? row.document_links : [],
+    archived_at: row?.archived_at || null,
+  };
+}
+
+function getSchemaUpdateMessage() {
+  return 'Database schema update required. Run the new migration SQL (supabase_feature_migration.sql) or re-run the updated supabase.sql in Supabase.';
+}
+
+function stripExtendedSchemaFields(payload = {}) {
+  return {
+    name: payload.name,
+    dev_name: payload.dev_name,
+    group_name: payload.group_name,
+    notes: payload.notes,
+    server_host: payload.server_host,
+    server_user: payload.server_user,
+    server_password: payload.server_password,
+    com_data: payload.com_data,
+    som_data: payload.som_data,
+    host_entries: payload.host_entries,
+    other_info: payload.other_info,
+    updated_at: payload.updated_at,
+  };
+}
+
+function payloadUsesExtendedSchema(payload = {}) {
+  return Boolean(normalizeText(payload.env_sheet_url)) || normalizeDocumentLinks(payload.document_links).length > 0;
+}
+
 function validatePayload(payload = {}) {
   const normalizedPayload = {
     name: normalizeText(payload.name),
@@ -33,6 +108,8 @@ function validatePayload(payload = {}) {
     som_data: normalizeObject(payload.som_data),
     host_entries: normalizeText(payload.host_entries),
     other_info: normalizeText(payload.other_info),
+    env_sheet_url: normalizeText(payload.env_sheet_url),
+    document_links: normalizeDocumentLinks(payload.document_links),
     updated_at: new Date().toISOString(),
   };
 
@@ -80,10 +157,35 @@ module.exports = async function handler(req, res) {
         throw error;
       }
 
-      return sendJson(res, 200, data);
+      return sendJson(res, 200, withCompatibilityDefaults(data));
     }
 
     if (req.method === 'PUT') {
+      if (req.body?.action === 'restore') {
+        const { data, error } = await supabase
+          .from('environments')
+          .update({
+            archived_at: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) {
+          if (isMissingColumnError(error, 'archived_at')) {
+            return sendJson(res, 409, { error: getSchemaUpdateMessage() });
+          }
+
+          if (error.code === 'PGRST116') {
+            return sendJson(res, 404, { error: 'Environment not found.' });
+          }
+          throw error;
+        }
+
+        return sendJson(res, 200, withCompatibilityDefaults(data));
+      }
+
       const { normalizedPayload, validationErrors } = validatePayload(req.body);
       if (validationErrors.length > 0) {
         return sendJson(res, 400, { error: validationErrors.join(' ' ) });
@@ -97,22 +199,54 @@ module.exports = async function handler(req, res) {
         .single();
 
       if (error) {
+        if (isExtendedSchemaError(error)) {
+          if (payloadUsesExtendedSchema(req.body)) {
+            return sendJson(res, 409, { error: getSchemaUpdateMessage() });
+          }
+
+          const legacyResult = await supabase
+            .from('environments')
+            .update(stripExtendedSchemaFields(normalizedPayload))
+            .eq('id', id)
+            .select()
+            .single();
+
+          if (legacyResult.error) {
+            if (legacyResult.error.code === 'PGRST116') {
+              return sendJson(res, 404, { error: 'Environment not found.' });
+            }
+            throw legacyResult.error;
+          }
+
+          return sendJson(res, 200, withCompatibilityDefaults(legacyResult.data));
+        }
+
         if (error.code === 'PGRST116') {
           return sendJson(res, 404, { error: 'Environment not found.' });
         }
         throw error;
       }
 
-      return sendJson(res, 200, data);
+      return sendJson(res, 200, withCompatibilityDefaults(data));
     }
 
     if (req.method === 'DELETE') {
       const { error } = await supabase
         .from('environments')
-        .delete()
+        .update({
+          archived_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        if (isMissingColumnError(error, 'archived_at')) {
+          return sendJson(res, 409, { error: getSchemaUpdateMessage() });
+        }
+
+        throw error;
+      }
+
       return res.status(204).end();
     }
 

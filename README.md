@@ -15,9 +15,11 @@ The application helps a team:
 - search and filter environments quickly
 - store COM and SOM specific data separately
 - save host entries, DB info, machine details, and other notes
+- store environment sheet links and related document/runbook links
 - download BAT files for COM/SOM log commands
 - support multiple log downloads from one field
 - visibly highlight recently updated environments
+- archive environments instead of permanently deleting them
 - restrict access using login + admin approval
 
 ---
@@ -37,6 +39,8 @@ Each environment can store:
 - Host file entries
 - SSH details
 - COM and SOM DB information
+- Environment sheet link
+- Related document links (runbooks, SOPs, diagrams, onboarding docs)
 - Other environment-specific information
 
 ### 2. Group-based navigation
@@ -100,7 +104,16 @@ If an environment was updated within the last 7 days, the card shows a visible w
 ### 8. Theme support
 The application supports dark and light themes.
 
-### 9. Admin-controlled access
+### 9. Archive and restore flow
+Environments are soft-deleted.
+
+Behavior implemented:
+
+- deleting an environment now archives it instead of permanently removing it
+- users can switch to an archive view
+- archived environments can be restored back to the active list
+
+### 10. Admin-controlled access
 The app includes a simple application-level authentication model.
 
 Rules:
@@ -109,13 +122,25 @@ Rules:
 - new users cannot access environments until approved by an admin
 - admin users can approve or reject other users
 
-### 10. Password management
+### 11. Password management
 Approved logged-in users can change their password from a dedicated Change Password section.
 
-### 11. Discoverable navigation for protected features
+### 12. Environment sheet and documentation links
+Each environment can now store:
+
+- a dedicated environment sheet URL
+- additional document links such as runbooks, SOPs, diagrams, or onboarding notes
+
+Document links can be entered as either:
+
+- `Label | URL`
+- or just `URL`
+
+### 13. Discoverable navigation for protected features
 Once logged in, users see separate navigation buttons for:
 
 - Environments
+- Archive
 - Admin Access (admins only)
 - Change Password
 
@@ -196,12 +221,26 @@ vercel.json
 
 There are **two SQL setup files**.
 
+If your database is already set up and you only want the new archive/document-link feature columns, you can run:
+
+- `supabase_feature_migration.sql`
+
 ### 1. Main environment schema
 Run:
 
 - `supabase.sql`
 
+For already-existing databases that only need the latest extra fields, run instead:
+
+- `supabase_feature_migration.sql`
+
 This creates the `environments` table and related environment fields.
+
+This schema now also includes:
+
+- `env_sheet_url`
+- `document_links`
+- `archived_at`
 
 ### 2. Authentication schema
 Run:
@@ -329,6 +368,17 @@ This app is intended for internal controlled access, but keep these points in mi
 2. browse to the environment
 3. edit details as needed
 4. save the environment
+
+### Archive and restore environments
+1. click the archive action on an active environment
+2. open the **Archive** view
+3. restore the environment when needed
+
+### Add environment sheet and document links
+1. open the environment editor
+2. add the main environment sheet URL
+3. add extra document links using one per line
+4. optionally use `Label | URL` format for cleaner display
 
 ### Download log BAT files
 1. store one or more COM/SOM log commands in the corresponding log field
